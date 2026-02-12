@@ -68,6 +68,39 @@
       "label": "Open-Source Configuration",
       "advanced": true,
       "help": "Optional. Configure custom embedder, vector store, LLM, or history DB for open-source mode. Has sensible defaults — only override what you need."
+    },
+    "ignoreCron": {
+      "label": "Ignore Cron Jobs",
+      "help": "Skip auto-recall and auto-capture for all cron job sessions"
+    },
+    "ignoreSessionKeys": {
+      "label": "Ignore Session Keys",
+      "advanced": true,
+      "help": "Exact session keys to exclude from automatic memory processing"
+    },
+    "ignoreSessionKeyPrefixes": {
+      "label": "Ignore Session Key Prefixes",
+      "advanced": true,
+      "help": "Session key prefixes to exclude. Matched against both the full key and the portion after agent:<id>:"
+    },
+    "ignoreAgentIds": {
+      "label": "Ignore Agent IDs",
+      "advanced": true,
+      "help": "Agent IDs to exclude from automatic memory processing"
+    },
+    "ignorePatterns": {
+      "label": "Ignore Patterns",
+      "advanced": true,
+      "help": "Arbitrary strings matched as substrings against session keys. Use for flexible matching of any part of the key."
+    },
+    "ignoreHeartbeat": {
+      "label": "Ignore Heartbeat Messages",
+      "help": "Skip auto-recall and auto-capture when user messages start with HEARTBEAT_OK. Enabled by default."
+    },
+    "ignoreTrivialMessages": {
+      "label": "Ignore Trivial Messages",
+      "advanced": true,
+      "help": "User messages starting with any of these strings are treated as trivial and skipped during auto-recall and auto-capture."
     }
   },
   "configSchema": {
@@ -161,6 +194,39 @@
             "type": "string"
           }
         }
+      },
+      "ignoreCron": {
+        "type": "boolean",
+        "default": false
+      },
+      "ignoreSessionKeys": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "ignoreSessionKeyPrefixes": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "ignoreAgentIds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "ignorePatterns": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "ignoreHeartbeat": {
+        "type": "boolean",
+        "default": true
+      },
+      "ignoreTrivialMessages": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
       }
     },
     "required": []
