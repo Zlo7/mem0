@@ -122,6 +122,54 @@ openclaw mem0 stats
 | `topK` | `number` | `5` | Max memories per recall |
 | `searchThreshold` | `number` | `0.3` | Min similarity (0–1) |
 
+### Ignore Filters
+
+Control which sessions are excluded from auto-recall and auto-capture:
+
+| Key | Type | Default | |
+|-----|------|---------|---|
+| `ignoreCron` | `boolean` | `false` | Skip all cron job sessions |
+| `ignoreSessionKeys` | `array<string>` | `[]` | Exact session keys to exclude |
+| `ignoreSessionKeyPrefixes` | `array<string>` | `[]` | Session key prefixes to exclude |
+| `ignoreAgentIds` | `array<string>` | `[]` | Agent IDs to exclude |
+| `ignorePatterns` | `array<string>` | `[]` | Substring patterns to match in session keys |
+| `ignoreHeartbeat` | `boolean` | `true` | Skip when user messages start with `HEARTBEAT_OK` |
+| `ignoreTrivialMessages` | `array<string>` | `[]` | Custom trivial message prefixes to skip |
+
+#### Common Use Cases
+
+**Exclude cron jobs:**
+```json5
+"ignoreCron": true
+```
+
+**Exclude specific agents:**
+```json5
+"ignoreAgentIds": ["scheduler", "monitor"]
+```
+
+**Flexible pattern matching:**
+```json5
+"ignorePatterns": ["health-check", "heartbeat"]
+```
+
+**Advanced prefix matching:**
+```json5
+"ignoreSessionKeyPrefixes": ["cron:", "test:"]
+```
+
+**Skip heartbeat messages** (enabled by default):
+```json5
+"ignoreHeartbeat": true
+```
+
+**Skip custom trivial messages:**
+```json5
+"ignoreTrivialMessages": ["PING", "PONG", "STATUS_CHECK"]
+```
+
+Manual memory tools (`memory_search`, `memory_store`, etc.) remain available even for ignored sessions.
+
 ### Platform mode
 
 | Key | Type | Default | |
