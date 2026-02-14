@@ -17,6 +17,24 @@ import {
   GraphSimpleRelationshipArgsSchema, // Used for delete tool
 } from "../graphs/tools";
 
+const MEM0_DEBUG =
+  process.env.MEM0_DEBUG === "1" || process.env.MEM0_DEBUG === "true";
+
+function safeJson(value: unknown, maxLen = 4000): string {
+  try {
+    const out = JSON.stringify(value);
+    if (!out) return String(value);
+    return out.length > maxLen ? `${out.slice(0, maxLen)}...<truncated>` : out;
+  } catch {
+    return String(value);
+  }
+}
+
+function debugLog(stage: string, payload: Record<string, unknown>): void {
+  if (!MEM0_DEBUG) return;
+  console.error(`[mem0-debug] langchain.${stage}: ${safeJson(payload)}`);
+}
+
 const convertToLangchainMessages = (messages: Message[]): BaseMessage[] => {
   return messages.map((msg) => {
     const content =
@@ -162,7 +180,25 @@ export class LangchainLLM implements LLM {
 
     // --- Invoke and Process Response ---
     try {
+      debugLog("invoke.request", {
+        modelName: this.modelName,
+        toolNames,
+        hasTools: !!tools?.length,
+        responseFormat: response_format,
+        selectedSchema: selectedSchema ? "selected" : "none",
+        isStructuredOutput,
+        isToolCallResponse,
+        invokeOptions,
+        messageRoles: messages.map((m) => m.role),
+      });
+
       const response = await runnable.invoke(langchainMessages, invokeOptions);
+
+      debugLog("invoke.response", {
+        responseType: typeof response,
+        hasToolCalls: !!response?.tool_calls,
+        response,
+      });
 
       if (isStructuredOutput && !isToolCallResponse) {
         // Memory prompt with structured output
@@ -221,6 +257,29 @@ export class LangchainLLM implements LLM {
         return JSON.stringify(response);
       }
     } catch (error) {
+      const errObj = error as any;
+      debugLog("invoke.error", {
+        modelName: this.modelName,
+        toolNames,
+        responseFormat: response_format,
+        selectedSchema: selectedSchema ? "selected" : "none",
+        isStructuredOutput,
+        isToolCallResponse,
+        invokeOptions,
+        errorName: errObj?.name,
+        errorMessage: errObj?.message,
+        errorStack: errObj?.stack,
+        errorStatus:
+          errObj?.status ||
+          errObj?.statusCode ||
+          errObj?.response?.status ||
+          errObj?.cause?.status,
+        errorResponseData:
+          errObj?.response?.data ||
+          errObj?.response?.body ||
+          errObj?.cause?.response?.data ||
+          errObj?.cause?.response?.body,
+      });
       throw error;
     }
   }

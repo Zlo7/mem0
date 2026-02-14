@@ -37,6 +37,24 @@ import { parse_vision_messages } from "../utils/memory";
 import { HistoryManager } from "../storage/base";
 import { captureClientEvent } from "../utils/telemetry";
 
+const MEM0_DEBUG =
+  process.env.MEM0_DEBUG === "1" || process.env.MEM0_DEBUG === "true";
+
+function safeJson(value: unknown, maxLen = 3000): string {
+  try {
+    const out = JSON.stringify(value);
+    if (!out) return String(value);
+    return out.length > maxLen ? `${out.slice(0, maxLen)}...<truncated>` : out;
+  } catch {
+    return String(value);
+  }
+}
+
+function debugLog(stage: string, payload: Record<string, unknown>): void {
+  if (!MEM0_DEBUG) return;
+  console.error(`[mem0-debug] ${stage}: ${safeJson(payload)}`);
+}
+
 export class Memory {
   private config: MemoryConfig;
   private customPrompt: string | undefined;
@@ -259,6 +277,11 @@ export class Memory {
       { type: "json_object" },
     );
 
+    debugLog("fact-retrieval.raw-response", {
+      responseType: typeof response,
+      response,
+    });
+
     const cleanResponse = removeCodeBlocks(response as string);
     let facts: string[] = [];
     try {
@@ -273,14 +296,28 @@ export class Memory {
       facts = [];
     }
 
+    debugLog("fact-retrieval.parsed", {
+      factsType: Array.isArray(facts) ? "array" : typeof facts,
+      factsPreview: Array.isArray(facts)
+        ? facts.map((f) => ({ type: typeof f, value: f })).slice(0, 10)
+        : facts,
+    });
+
     // Get embeddings for new facts
     const newMessageEmbeddings: Record<string, number[]> = {};
     const retrievedOldMemory: Array<{ id: string; text: string }> = [];
 
     // Create embeddings and search for similar memories
     for (const fact of facts) {
-      const embedding = await this.embedder.embed(fact);
-      newMessageEmbeddings[fact] = embedding;
+      if (typeof fact !== "string") {
+        debugLog("fact-retrieval.non-string-fact", {
+          factType: typeof fact,
+          fact,
+        });
+      }
+
+      const embedding = await this.embedder.embed(fact as string);
+      newMessageEmbeddings[fact as string] = embedding;
 
       const existingMemories = await this.vectorStore.search(
         embedding,
@@ -313,6 +350,11 @@ export class Memory {
       { type: "json_object" },
     );
 
+    debugLog("memory-update.raw-response", {
+      responseType: typeof updateResponse,
+      response: updateResponse,
+    });
+
     const cleanUpdateResponse = removeCodeBlocks(updateResponse as string);
     let memoryActions: any[] = [];
     try {
@@ -326,10 +368,22 @@ export class Memory {
       memoryActions = [];
     }
 
+    debugLog("memory-update.parsed-actions", {
+      actionsType: Array.isArray(memoryActions) ? "array" : typeof memoryActions,
+      actionsPreview: Array.isArray(memoryActions)
+        ? memoryActions.slice(0, 20)
+        : memoryActions,
+    });
+
     // Process memory actions
     const results: MemoryItem[] = [];
     for (const action of memoryActions) {
       try {
+        debugLog("memory-action.start", {
+          action,
+          mappedId: action?.id ? tempUuidMapping[action.id] : undefined,
+        });
+
         switch (action.event) {
           case "ADD": {
             const memoryId = await this.createMemory(
@@ -374,7 +428,27 @@ export class Memory {
           }
         }
       } catch (error) {
+        const errObj = error as any;
         console.error(`Error processing memory action: ${error}`);
+        debugLog("memory-action.error", {
+          action,
+          actionEvent: action?.event,
+          actionId: action?.id,
+          mappedId: action?.id ? tempUuidMapping[action.id] : undefined,
+          errorName: errObj?.name,
+          errorMessage: errObj?.message,
+          errorStack: errObj?.stack,
+          errorStatus:
+            errObj?.status ||
+            errObj?.statusCode ||
+            errObj?.response?.status ||
+            errObj?.cause?.status,
+          errorResponseData:
+            errObj?.response?.data ||
+            errObj?.response?.body ||
+            errObj?.cause?.response?.data ||
+            errObj?.cause?.response?.body,
+        });
       }
     }
 
