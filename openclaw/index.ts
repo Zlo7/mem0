@@ -39,6 +39,7 @@ type Mem0Config = {
     vectorStore?: { provider: string; config: Record<string, unknown> };
     llm?: { provider: string; config: Record<string, unknown> };
     historyDbPath?: string;
+    graphStore?: { provider: string; config: Record<string, unknown> };
   };
   // Shared
   userId: string;
@@ -208,6 +209,7 @@ class OSSProvider implements Mem0Provider {
     private readonly ossConfig?: Mem0Config["oss"],
     private readonly customPrompt?: string,
     private readonly resolvePath?: (p: string) => string,
+    private readonly enableGraph?: boolean,
   ) { }
 
   private async ensureMemory(): Promise<void> {
@@ -235,6 +237,16 @@ class OSSProvider implements Mem0Provider {
     }
 
     if (this.customPrompt) config.customPrompt = this.customPrompt;
+
+    if (this.enableGraph) {
+      if (!this.ossConfig?.graphStore?.config) {
+        throw new Error(
+          "openclaw-mem0: enableGraph is true but oss.graphStore config is missing. " +
+          "Provide graphStore: { provider: 'neo4j', config: { url, username, password } } in oss config."
+        );
+      }
+      config.graph_store = this.ossConfig.graphStore;
+    }
 
     this.memory = new Memory(config);
   }
@@ -569,8 +581,16 @@ function createProvider(
   api: OpenClawPluginApi,
 ): Mem0Provider {
   if (cfg.mode === "open-source") {
-    return new OSSProvider(cfg.oss, cfg.customPrompt, (p) =>
-      api.resolvePath(p),
+    if (cfg.enableGraph) {
+      api.logger.info(
+        `openclaw-mem0: graph enabled for OSS mode (provider: ${cfg.oss?.graphStore?.provider ?? "neo4j"})`
+      );
+    }
+    return new OSSProvider(
+      cfg.oss,
+      cfg.customPrompt,
+      (p) => api.resolvePath(p),
+      cfg.enableGraph,
     );
   }
 
