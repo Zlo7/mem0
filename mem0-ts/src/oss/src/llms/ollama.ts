@@ -42,8 +42,9 @@ export class OllamaLLM implements LLM {
               : JSON.stringify(msg.content),
         };
       }),
-      ...(responseFormat?.type === "json_object" && { format: "json" }),
-      ...(tools && { tools, tool_choice: "auto" }),
+      ...(!tools &&
+        responseFormat?.type === "json_object" && { format: "json" }),
+      ...(tools && { tools }),
     });
 
     const response = completion.message;

@@ -21,15 +21,48 @@ export class OllamaEmbedder implements Embedder {
     });
   }
 
-  async embed(text: string): Promise<number[]> {
+  async embed(text: string | any): Promise<number[]> {
     try {
       await this.ensureModelExists();
     } catch (err) {
       logger.error(`Error ensuring model exists: ${err}`);
     }
+
+    // Defensive coercion: callers (especially graph_memory) may pass objects
+    let safeText: string;
+    if (typeof text === "string") {
+      safeText = text;
+    } else if (text == null) {
+      safeText = "";
+    } else if (typeof text === "object") {
+      const candidate =
+        text.fact ??
+        text.text ??
+        text.memory ??
+        text.data ??
+        text.source ??
+        text.destination ??
+        text.entity ??
+        text.name ??
+        text.content ??
+        text.query ??
+        text.value;
+      safeText =
+        typeof candidate === "string" ? candidate : JSON.stringify(text);
+    } else {
+      safeText = String(text);
+    }
+
+    if (!safeText || safeText === "{}" || safeText === "null") {
+      logger.warn(
+        `OllamaEmbedder.embed(): skipping empty/invalid input: ${typeof text}`,
+      );
+      return new Array(this.embeddingDims || 768).fill(0);
+    }
+
     const response = await this.ollama.embeddings({
       model: this.model,
-      prompt: text,
+      prompt: safeText,
     });
     return response.embedding;
   }
