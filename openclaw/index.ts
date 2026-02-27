@@ -245,7 +245,8 @@ class OSSProvider implements Mem0Provider {
           "Provide graphStore: { provider: 'neo4j', config: { url, username, password } } in oss config."
         );
       }
-      config.graph_store = this.ossConfig.graphStore;
+      config.graphStore = this.ossConfig.graphStore;
+      config.enableGraph = true;
     }
 
     this.memory = new Memory(config);
