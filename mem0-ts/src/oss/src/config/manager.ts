@@ -100,6 +100,11 @@ export class ConfigManager {
       graphStore: {
         ...DEFAULT_MEMORY_CONFIG.graphStore,
         ...userConfig.graphStore,
+        // Only include graphStore.llm if user explicitly provided it;
+        // otherwise the default (openai) would override the top-level llm provider.
+        ...(userConfig.graphStore?.llm
+          ? { llm: userConfig.graphStore.llm }
+          : { llm: undefined }),
       },
       historyStore: {
         ...DEFAULT_MEMORY_CONFIG.historyStore,
