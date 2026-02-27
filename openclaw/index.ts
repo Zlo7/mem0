@@ -16,6 +16,8 @@
 
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { shouldIgnoreTurn } from "./src/shouldIgnoreTurn";
+import { buildTrivialPrefixes, isTrivialMessage } from "./src/isTrivialMessage";
 
 // ============================================================================
 // Types
@@ -46,6 +48,13 @@ type Mem0Config = {
   autoRecall: boolean;
   searchThreshold: number;
   topK: number;
+  ignoreCron: boolean;
+  ignoreSessionKeys: string[];
+  ignoreSessionKeyPrefixes: string[];
+  ignoreAgentIds: string[];
+  ignorePatterns: string[];
+  ignoreHeartbeat: boolean;
+  ignoreTrivialMessages: string[];
 };
 
 // Unified types for the provider interface
@@ -503,6 +512,13 @@ const ALLOWED_KEYS = [
   "searchThreshold",
   "topK",
   "oss",
+  "ignoreCron",
+  "ignoreSessionKeys",
+  "ignoreSessionKeyPrefixes",
+  "ignoreAgentIds",
+  "ignorePatterns",
+  "ignoreHeartbeat",
+  "ignoreTrivialMessages",
 ];
 
 function assertAllowedKeys(
@@ -573,6 +589,13 @@ const mem0ConfigSchema = {
         typeof cfg.searchThreshold === "number" ? cfg.searchThreshold : 0.5,
       topK: typeof cfg.topK === "number" ? cfg.topK : 5,
       oss: ossConfig,
+      ignoreCron: cfg.ignoreCron === true,
+      ignoreSessionKeys: Array.isArray(cfg.ignoreSessionKeys) ? cfg.ignoreSessionKeys as string[] : [],
+      ignoreSessionKeyPrefixes: Array.isArray(cfg.ignoreSessionKeyPrefixes) ? cfg.ignoreSessionKeyPrefixes as string[] : [],
+      ignoreAgentIds: Array.isArray(cfg.ignoreAgentIds) ? cfg.ignoreAgentIds as string[] : [],
+      ignorePatterns: Array.isArray(cfg.ignorePatterns) ? cfg.ignorePatterns as string[] : [],
+      ignoreHeartbeat: cfg.ignoreHeartbeat !== false,
+      ignoreTrivialMessages: Array.isArray(cfg.ignoreTrivialMessages) ? cfg.ignoreTrivialMessages as string[] : [],
     };
   },
 };
@@ -1248,6 +1271,18 @@ const memoryPlugin = {
         const sessionId = (ctx as any)?.sessionKey ?? undefined;
         if (sessionId) currentSessionId = sessionId;
 
+        if (shouldIgnoreTurn(ctx as any, cfg)) {
+          api.logger.debug(`openclaw-mem0: skipping recall for sessionKey=${(ctx as any)?.sessionKey}`);
+          return;
+        }
+
+        // Skip recall for trivial prompts (heartbeats, etc.)
+        const trivialPrefixes = buildTrivialPrefixes(cfg);
+        if (isTrivialMessage(event.prompt, trivialPrefixes)) {
+          api.logger.debug(`openclaw-mem0: skipping recall — trivial prompt`);
+          return;
+        }
+
         try {
           // Search long-term memories (user-scoped)
           const longTermResults = await provider.search(
@@ -1315,6 +1350,11 @@ const memoryPlugin = {
         const sessionId = (ctx as any)?.sessionKey ?? undefined;
         if (sessionId) currentSessionId = sessionId;
 
+        if (shouldIgnoreTurn(ctx as any, cfg)) {
+          api.logger.debug(`openclaw-mem0: skipping capture for sessionKey=${(ctx as any)?.sessionKey}`);
+          return;
+        }
+
         try {
           // Extract messages, limiting to last 10
           const recentMessages = event.messages.slice(-10);
@@ -1364,6 +1404,20 @@ const memoryPlugin = {
           }
 
           if (formattedMessages.length === 0) return;
+
+          // Filter trivial user messages (heartbeats, etc.)
+          const trivialPrefixes = buildTrivialPrefixes(cfg);
+          if (trivialPrefixes.length > 0) {
+            const meaningful = formattedMessages.filter(
+              (m) => m.role !== "user" || !isTrivialMessage(m.content, trivialPrefixes),
+            );
+            if (meaningful.filter((m) => m.role === "user").length === 0) {
+              api.logger.debug(`openclaw-mem0: skipping capture — all user messages are trivial`);
+              return;
+            }
+            formattedMessages.length = 0;
+            formattedMessages.push(...meaningful);
+          }
 
           const addOpts = buildAddOptions(undefined, currentSessionId);
           const result = await provider.add(
