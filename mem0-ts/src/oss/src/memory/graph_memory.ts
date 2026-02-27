@@ -572,12 +572,40 @@ export class MemoryGraph {
     return results;
   }
 
+  private _safeEntityString(value: any, fieldName = "value"): string {
+    if (typeof value === "string") {
+      return value.toLowerCase().trim().replace(/\s+/g, "_");
+    }
+    if (value == null) {
+      logger.warn(`Invalid ${fieldName} for entity: ${value}`);
+      return "";
+    }
+    if (typeof value === "object") {
+      const candidate =
+        value.source ??
+        value.destination ??
+        value.entity ??
+        value.name ??
+        value.text;
+      if (typeof candidate === "string") {
+        return candidate.toLowerCase().trim().replace(/\s+/g, "_");
+      }
+      const serialized = JSON.stringify(value);
+      if (serialized === "{}") {
+        logger.warn(`Invalid ${fieldName} for entity: empty object`);
+        return "";
+      }
+      return serialized.toLowerCase().trim().replace(/\s+/g, "_");
+    }
+    return String(value).toLowerCase().trim().replace(/\s+/g, "_");
+  }
+
   private _removeSpacesFromEntities(entityList: any[]) {
-    return entityList.map((item) => ({
+    return (entityList || []).map((item) => ({
       ...item,
-      source: item.source.toLowerCase().replace(/ /g, "_"),
-      relationship: item.relationship.toLowerCase().replace(/ /g, "_"),
-      destination: item.destination.toLowerCase().replace(/ /g, "_"),
+      source: this._safeEntityString(item?.source, "source"),
+      relationship: this._safeEntityString(item?.relationship, "relationship"),
+      destination: this._safeEntityString(item?.destination, "destination"),
     }));
   }
 
